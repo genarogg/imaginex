@@ -122,30 +122,49 @@ const Img: React.FC<ExtendedImgProps> = ({
 
             const response = await fetch(
                 `/api/getBase64/remote?url=${encodeURIComponent(imageUrl)}`,
-                { signal: abortControllerRef.current.signal }
+                { 
+                    signal: abortControllerRef.current.signal,
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }
             );
 
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Silently handle API errors and fallback to direct loading
+                throw new Error(`API request failed with status: ${response.status}`);
             }
 
             const data = await response.json();
             
-            if (data.data) {
+            if (data.success && data.data) {
                 const svgData = svg({ base64: data.data });
                 setSvgBackground(svgData);
                 setIsLoaded(false);
+            } else if (data.error) {
+                throw new Error(`API Error: ${data.error}`);
             } else {
-                throw new Error('No base64 data received');
+                throw new Error('No base64 data received from API');
             }
         } catch (error) {
             const err = error as Error;
-            console.error('Error fetching base64:', err);
-            setHasError(true);
+            
+            // Silently fall back to direct image loading without blur effect
+            // Only log in development mode
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Base64 fetch failed, falling back to direct loading:', err.message);
+            }
+            
             setIsLoaded(true);
-            onError?.(err);
+            setSvgBackground(null);
+            
+            // Only call onError if it's not an abort error and if explicitly requested
+            if (!err.name?.includes('Abort') && !err.message?.includes('aborted')) {
+                onError?.(err);
+            }
         }
     }, [fetchTimeout, onLoadStart, onError]);
 

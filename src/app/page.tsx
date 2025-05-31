@@ -21,7 +21,7 @@ const img: React.FC<imgProps> = () => {
             <div className="" style={{ display: "flex", justifyContent: "space-around" }}>
                 <div className="" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h4>Sin blurDataURL</h4>
-                    {/* <Img type="remote" src={remote} alt="demo" id='demo' style={{ border: "1px solid red" }} width={width} height={height} /> */}
+                    <Img type="remote" src={remote} alt="demo" id='demo' style={{ border: "1px solid red" }} width={width} height={height} />
                 </div>
                 <div className="" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h4>Con blurDataURL</h4>
@@ -50,13 +50,13 @@ const img: React.FC<imgProps> = () => {
             <div className="" style={{ display: "flex", justifyContent: "space-around" }}>
                 <div className="" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h4>Normal</h4>
-                    {/* <Img type="local" src={imgLocal} alt="demo" id='demo' style={{ border: "1px solid red" }} width={width} height={height} /> */}
+                    <Img type="local" src={imgLocal} alt="demo" id='demo' style={{ border: "1px solid red" }} width={width} height={height} />
                 </div>
                 <div className="" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <h4>Background</h4>
-                    {/* <Img type="bg" src={imgLocal} alt="demo" id='dedasmo' style={{ border: "1px solid red", display: "flex", justifyContent: "center", alignItems: "center" }} width={width} height={height} >
+                    <Img type="bg" src={imgLocal} alt="demo" id='dedasmo' style={{ border: "1px solid red", display: "flex", justifyContent: "center", alignItems: "center" }} width={width} height={height} >
                         <h1>hola</h1>
-                    </Img> */}
+                    </Img>
                 </div>
             </div>
             <br />
