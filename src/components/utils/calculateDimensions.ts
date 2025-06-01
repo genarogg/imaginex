@@ -139,6 +139,8 @@ export const calculateBackgroundDimensions = ({
  */
 export const useDimensions = (initialDimensions?: Partial<DimensionInput>) => {
     const [dimensions, setDimensions] = useState<DimensionOutput>({ width: 0, height: 0 });
+
+    console.log(initialDimensions)
     
     const updateDimensions = useCallback((params: DimensionInput) => {
         const newDimensions = calculateDimensions(params);
