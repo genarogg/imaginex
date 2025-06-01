@@ -418,7 +418,7 @@ const BackgroundImageComponent: React.FC = () => (
                       <tr>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">type</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">'remote' | 'local' | 'bg'</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">'local'</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                           {language === "en" ? "Yes" : "Sí"}
                         </td>
