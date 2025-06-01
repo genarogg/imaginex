@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import ImgProps from './ImgProps';
-import { calculateDimensions } from './utils/calculateDimensions';
+import ImgProps from '../utils/ImgProps';
+import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
 
 const ImgLocal: React.FC<ImgProps> = ({
     src,
@@ -29,17 +29,12 @@ const ImgLocal: React.FC<ImgProps> = ({
     
     const imgRef = useRef<HTMLDivElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Cleanup function
     const cleanup = useCallback(() => {
         if (observerRef.current) {
             observerRef.current.disconnect();
             observerRef.current = null;
-        }
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
         }
     }, []);
 
@@ -72,45 +67,19 @@ const ImgLocal: React.FC<ImgProps> = ({
         return cleanup;
     }, [priority, visible, cleanup]);
 
-    // Handle image load and styling
+    // Handle image load using utility function
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-        const img = event.currentTarget;
-        const naturalWidth = img.naturalWidth;
-        const naturalHeight = img.naturalHeight;
-        
-        // Usar la función utilitaria para calcular dimensiones
-        const calculatedDimensions = calculateDimensions({
-            naturalWidth,
-            naturalHeight,
+        handleImageLoadUtil({
+            event,
+            id,
             width,
             height,
-            maintainAspectRatio
-        });
-        
-        setImageDimensions(calculatedDimensions);
-        setIsLoaded(true);
-        setHasError(false);
-
-        if (!id) return;
-
-        // Use requestAnimationFrame for better performance
-        requestAnimationFrame(() => {
-            const container = document.getElementById(`${id}Container`);
-            const imgElement = document.getElementById(`${id}Img`);
-            const ghost = document.getElementById(`${id}Ghost`);
-
-            if (imgElement && container && ghost) {
-                const { width: calcWidth, height: calcHeight } = calculatedDimensions;
-
-                // Batch DOM updates with calculated dimensions
-                container.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
-                ghost.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
-                imgElement.style.opacity = '1';
-
-                // Delay background removal for smoother transition
-                timeoutRef.current = setTimeout(() => {
-                    container.style.backgroundImage = 'none';
-                }, 500);
+            maintainAspectRatio,
+            componentType: 'local',
+            onDimensionsCalculated: (dimensions) => {
+                setImageDimensions(dimensions);
+                setIsLoaded(true);
+                setHasError(false);
             }
         });
     }, [id, width, height, maintainAspectRatio]);

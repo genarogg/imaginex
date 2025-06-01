@@ -2,20 +2,10 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import ImgProps from './ImgProps';
-import { calculateBackgroundDimensions } from './utils/calculateDimensions';
+import { ImgBGProps } from '../utils/ImgProps';
+import { handleBackgroundImageLoad } from '../utils/handleImageLoadUtil';
 
-interface ExtendedImgProps extends ImgProps {
-    children?: React.ReactNode;
-    backgroundAttachment?: 'fixed' | 'scroll' | 'local';
-    transitionDuration?: number;
-    removeDelay?: number;
-    backgroundSize?: 'cover' | 'contain' | 'auto' | string;
-    backgroundPosition?: string;
-    maintainAspectRatio?: boolean;
-}
-
-const ImgBG: React.FC<ExtendedImgProps> = ({
+const ImgBG: React.FC<ImgBGProps> = ({
     src,
     alt,
     id,
@@ -42,7 +32,7 @@ const ImgBG: React.FC<ExtendedImgProps> = ({
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
     const [containerDimensions, setContainerDimensions] = useState({ width, height });
     const [calculatedBackgroundSize, setCalculatedBackgroundSize] = useState(backgroundSize);
-    
+
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
 
@@ -58,44 +48,31 @@ const ImgBG: React.FC<ExtendedImgProps> = ({
         return cleanup;
     }, [cleanup]);
 
+    // Handle image load using utility function
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-        const target = event.target as HTMLImageElement;
-        const imageSrc = target.src;
-        const naturalWidth = target.naturalWidth;
-        const naturalHeight = target.naturalHeight;
-        
-        if (!imageSrc) return;
-
-        // Guardar las dimensiones originales de la imagen
-        setImageDimensions({ width: naturalWidth, height: naturalHeight });
-
-        // Usar la función utilitaria para calcular dimensiones y backgroundSize
-        const calculatedDimensions = calculateBackgroundDimensions({
-            naturalWidth,
-            naturalHeight,
+        handleBackgroundImageLoad({
+            event,
             width,
             height,
             maintainAspectRatio,
-            backgroundSize
-        });
-        
-        setContainerDimensions({
-            width: calculatedDimensions.width,
-            height: calculatedDimensions.height
-        });
-        
-        setCalculatedBackgroundSize(calculatedDimensions.backgroundSize);
-        setFinalImageSrc(imageSrc);
-        setIsLoaded(true);
-        setHasError(false);
+            backgroundSize,
+            onImageLoaded: (imageSrc, imageDimensions, containerDimensions, calculatedBackgroundSize) => {
+                setImageDimensions(imageDimensions);
+                setContainerDimensions(containerDimensions);
+                setCalculatedBackgroundSize(calculatedBackgroundSize);
+                setFinalImageSrc(imageSrc);
+                setIsLoaded(true);
+                setHasError(false);
 
-        // Delay removal of the hidden Image element
-        timeoutRef.current = setTimeout(() => {
-            if (imgRef.current && imgRef.current.parentNode) {
-                imgRef.current.remove();
-                imgRef.current = null;
+                // Delay removal of the hidden Image element
+                timeoutRef.current = setTimeout(() => {
+                    if (imgRef.current && imgRef.current.parentNode) {
+                        imgRef.current.remove();
+                        imgRef.current = null;
+                    }
+                }, removeDelay);
             }
-        }, removeDelay);
+        });
     }, [removeDelay, width, height, maintainAspectRatio, backgroundSize]);
 
     const handleImageError = useCallback(() => {
@@ -111,13 +88,13 @@ const ImgBG: React.FC<ExtendedImgProps> = ({
     const blurUrl = typeof src === 'object' && src.blurDataURL ? src.blurDataURL : '';
 
     // Use calculated dimensions if maintaining aspect ratio and loaded
-    const finalContainerDimensions = maintainAspectRatio && isLoaded 
-        ? containerDimensions 
+    const finalContainerDimensions = maintainAspectRatio && isLoaded
+        ? containerDimensions
         : { width, height };
 
     // Use calculated background size
-    const finalBackgroundSize = maintainAspectRatio && isLoaded 
-        ? calculatedBackgroundSize 
+    const finalBackgroundSize = maintainAspectRatio && isLoaded
+        ? calculatedBackgroundSize
         : backgroundSize;
 
     // Common background styles
@@ -203,8 +180,8 @@ const ImgBG: React.FC<ExtendedImgProps> = ({
                     className={`${className} responsiveImage ${isLoaded ? 'fadeIn' : ''}`}
                     style={{
                         ...backgroundStyles,
-                        backgroundImage: isLoaded && finalImageSrc 
-                            ? `url(${finalImageSrc})` 
+                        backgroundImage: isLoaded && finalImageSrc
+                            ? `url(${finalImageSrc})`
                             : blurUrl ? `url(${blurUrl})` : 'none',
                         width: finalContainerDimensions.width,
                         height: finalContainerDimensions.height,

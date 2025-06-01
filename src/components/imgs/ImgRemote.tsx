@@ -2,22 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import ImgProps from './ImgProps';
-import svg from './svg';
-import { calculateDimensions } from './utils/calculateDimensions';
+import { ImgRemoteProps } from '../utils/ImgProps';
+import svg from '../svg';
+import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
+import { fetchRemoteBase64 } from '../utils/fetchRemoteBase64Util';
 
-interface ExtendedImgRemoteProps extends ImgProps {
-    children?: React.ReactNode;
-    transitionDuration?: number;
-    fetchTimeout?: number;
-    onLoadStart?: () => void;
-    onLoadComplete?: () => void;
-    onError?: (error: Error) => void;
-    objectFit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
-    maintainAspectRatio?: boolean;
-}
-
-const ImgRemote: React.FC<ExtendedImgRemoteProps> = ({
+const ImgRemote: React.FC<ImgRemoteProps> = ({
     src,
     alt,
     id,
@@ -47,135 +37,57 @@ const ImgRemote: React.FC<ExtendedImgRemoteProps> = ({
     const [hasError, setHasError] = useState<boolean>(false);
     const [isImageLoaded, setIsImageLoaded] = useState<boolean>(false);
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-    
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
+
     const imgRef = useRef<HTMLImageElement | null>(null);
 
     // Check if this is a remote image
     const isRemoteImage = typeof src === 'string' && src.startsWith('http');
-    
+
     // Determine the actual placeholder and blurDataURL to use
     const actualPlaceholder = (isRemoteImage && !blurDataURL && !svgBackground) ? 'empty' : placeholder;
     const actualBlurDataURL = svgBackground || blurDataURL;
 
-    // Cleanup function
-    const cleanup = useCallback(() => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-    }, []);
+    // Handle remote image base64 fetching
+    const handleFetchRemoteBase64 = useCallback(async (imageUrl: string) => {
+        const result = await fetchRemoteBase64({
+            imageUrl,
+            fetchTimeout,
+            onLoadStart,
+            onError
+        });
 
-    // Fetch base64 for remote images
-    const fetchRemoteBase64 = useCallback(async (imageUrl: string) => {
-        try {
-            onLoadStart?.();
-            
-            abortControllerRef.current = new AbortController();
-            const timeoutId = setTimeout(() => {
-                abortControllerRef.current?.abort();
-            }, fetchTimeout);
-
-            const response = await fetch(
-                `/api/getBase64/remote?url=${encodeURIComponent(imageUrl)}`,
-                { 
-                    signal: abortControllerRef.current.signal,
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                }
-            );
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                throw new Error(`API request failed with status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.success && data.data) {
-                const svgData = svg({ base64: data.data });
-                setSvgBackground(svgData);
-                setIsLoaded(false);
-            } else if (data.error) {
-                throw new Error(`API Error: ${data.error}`);
-            } else {
-                throw new Error('No base64 data received from API');
-            }
-        } catch (error) {
-            const err = error as Error;
-            
+        if (result.success && result.svgData) {
+            setSvgBackground(result.svgData);
+            setIsLoaded(false);
+        } else {
             // Silently fall back to direct image loading without blur effect
-            if (process.env.NODE_ENV === 'development') {
-                console.warn('Base64 fetch failed, falling back to direct loading:', err.message);
-            }
-            
             setIsLoaded(true);
             setSvgBackground(null);
-            
-            // Only call onError if it's not an abort error and if explicitly requested
-            if (!err.name?.includes('Abort') && !err.message?.includes('aborted')) {
-                onError?.(err);
-            }
         }
     }, [fetchTimeout, onLoadStart, onError]);
 
     // Effect to handle remote image base64 fetching
     useEffect(() => {
         if (isRemoteImage && !blurDataURL) {
-            fetchRemoteBase64(src);
+            handleFetchRemoteBase64(src);
         }
+    }, [src, blurDataURL, handleFetchRemoteBase64, isRemoteImage]);
 
-        return cleanup;
-    }, [src, blurDataURL, fetchRemoteBase64, cleanup, isRemoteImage]);
-
-    // Handle image load completion
+    // Handle image load using utility function
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-        const img = event.currentTarget;
-        const naturalWidth = img.naturalWidth;
-        const naturalHeight = img.naturalHeight;
-        
-        // Usar la función utilitaria para calcular dimensiones
-        const calculatedDimensions = calculateDimensions({
-            naturalWidth,
-            naturalHeight,
+        handleImageLoadUtil({
+            event,
+            id,
             width,
             height,
-            maintainAspectRatio
-        });
-        
-        setImageDimensions(calculatedDimensions);
-        setIsImageLoaded(true);
-        
-        if (!id) return;
-
-        // Use requestAnimationFrame for better performance
-        requestAnimationFrame(() => {
-            const container = document.getElementById(`${id}Container`);
-            const imgElement = document.getElementById(`${id}Img`);
-            const ghost = document.getElementById(`${id}Ghost`);
-
-            if (imgElement && container && ghost) {
-                const { width: calcWidth, height: calcHeight } = calculatedDimensions;
-
-                // Batch DOM updates with calculated dimensions
-                container.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
-                ghost.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
-                imgElement.style.opacity = '1';
-
-                // Delayed background removal
-                timeoutRef.current = setTimeout(() => {
-                    container.style.backgroundImage = 'none';
-                    onLoadComplete?.();
-                }, transitionDuration);
-            }
+            maintainAspectRatio,
+            componentType: 'remote',
+            transitionDuration,
+            onDimensionsCalculated: (dimensions) => {
+                setImageDimensions(dimensions);
+                setIsImageLoaded(true);
+            },
+            onLoadComplete
         });
     }, [id, transitionDuration, onLoadComplete, width, height, maintainAspectRatio]);
 
@@ -289,7 +201,7 @@ const ImgRemote: React.FC<ExtendedImgRemoteProps> = ({
                     sizes={sizes}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
-                    style={{ 
+                    style={{
                         position: 'absolute',
                         opacity: isImageLoaded ? 1 : 0,
                         transition: `opacity ${transitionDuration * 0.7}ms ease-in-out`,
@@ -300,8 +212,8 @@ const ImgRemote: React.FC<ExtendedImgRemoteProps> = ({
                 />
                 <div
                     className="responsiveImage"
-                    style={{ 
-                        width: containerDimensions.width, 
+                    style={{
+                        width: containerDimensions.width,
                         height: containerDimensions.height,
                         pointerEvents: 'none'
                     }}
