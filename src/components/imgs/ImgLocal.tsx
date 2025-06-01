@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import ImgProps from '../utils/ImgProps';
 import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
+import ImageError from '../utils/ImageError';
 
 const ImgLocal: React.FC<ImgProps> = ({
     src,
@@ -97,29 +98,16 @@ const ImgLocal: React.FC<ImgProps> = ({
     // Get container dimensions
     const containerDimensions = isLoaded && maintainAspectRatio ? imageDimensions : { width, height };
 
-    // Render error state
+    // Render error state using reusable component
     if (hasError) {
         return (
-            <div
-                ref={imgRef}
-                style={{
-                    width: containerDimensions.width,
-                    height: containerDimensions.height,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#f3f4f6',
-                    color: '#6b7280',
-                    ...style
-                }}
-                className={`responsiveImage ${className}`}
-                role="img"
-                aria-label={`Failed to load image: ${alt}`}
-            >
-                <span>Image failed to load</span>
-            </div>
+            <ImageError
+                width={containerDimensions.width}
+                height={containerDimensions.height}
+                alt={alt}
+                className={className}
+                style={style}
+            />
         );
     }
 
@@ -190,4 +178,4 @@ const ImgLocal: React.FC<ImgProps> = ({
     );
 };
 
-export default ImgLocal;
+export default ImgLocal

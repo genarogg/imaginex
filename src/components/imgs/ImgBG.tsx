@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { ImgBGProps } from '../utils/ImgProps';
 import { handleBackgroundImageLoad } from '../utils/handleImageLoadUtil';
+import ImageError from '../utils/ImageError';
 
 const ImgBG: React.FC<ImgBGProps> = ({
     src,
@@ -105,29 +106,23 @@ const ImgBG: React.FC<ImgBGProps> = ({
         backgroundAttachment,
     };
 
+    // Error state using reusable component
     if (hasError) {
         return (
-            <div
-                className={`responsiveImage ${className}`}
+            <ImageError
+                width={finalContainerDimensions.width}
+                height={finalContainerDimensions.height}
+                alt={alt}
+                className={className}
                 style={{
                     ...backgroundStyles,
-                    backgroundColor: '#f3f4f6',
-                    width: finalContainerDimensions.width,
-                    height: finalContainerDimensions.height,
-                    position: 'relative' as const,
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#6b7280',
                     ...style
                 }}
-                role="img"
-                aria-label={`Background image failed to load: ${alt}`}
+                errorMessage="Background image failed to load"
+                isBackground={true}
             >
-                <span>Background failed to load</span>
                 {children}
-            </div>
+            </ImageError>
         );
     }
 

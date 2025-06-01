@@ -6,6 +6,7 @@ import { ImgRemoteProps } from '../utils/ImgProps';
 import svg from '../svg';
 import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
 import { fetchRemoteBase64 } from '../utils/fetchRemoteBase64Util';
+import ImageError from '../utils/ImageError';
 
 const ImgRemote: React.FC<ImgRemoteProps> = ({
     src,
@@ -96,6 +97,7 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
         console.error('Image load error:', err);
         setHasError(true);
         onError?.(err);
+        console.error(`Error loading image: ${src}`, error);
     }, [src, onError]);
 
     // Generate safe IDs
@@ -106,29 +108,19 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
     // Get container dimensions
     const containerDimensions = isImageLoaded && maintainAspectRatio ? imageDimensions : { width, height };
 
-    // Error state
+    // Error state using reusable component
     if (hasError) {
         return (
-            <div
-                style={{
-                    width: containerDimensions.width,
-                    height: containerDimensions.height,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#f3f4f6',
-                    color: '#6b7280',
-                    ...style
-                }}
-                className={`responsiveImage ${className}`}
-                role="img"
-                aria-label={`Failed to load image: ${alt}`}
+            <ImageError
+                width={containerDimensions.width}
+                height={containerDimensions.height}
+                alt={alt}
+                className={className}
+                style={style}
+                errorMessage="Remote image failed to load"
             >
-                <span>Image failed to load</span>
                 {children}
-            </div>
+            </ImageError>
         );
     }
 
