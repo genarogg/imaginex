@@ -4,7 +4,7 @@
   "author": "Genaro Gonzalez",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "files": [
     "src/app/api",
     "fn/postinstall.js",
