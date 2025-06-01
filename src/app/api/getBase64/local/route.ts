@@ -17,6 +17,7 @@ export const GET = async (req: NextRequest) => {
     return NextResponse.json({ data: base64 }, { status: 200 });
 
   } catch (err) {
+    console.error('Error fetching image:', err);
     return NextResponse.json({ error: 'Failed to read image' }, { status: 500 });
   }
 };
