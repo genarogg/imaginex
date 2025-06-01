@@ -10,6 +10,7 @@ interface CodeBlockProps {
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = "typescript", title }) => {
+  console.log(language)
   const [copied, setCopied] = useState(false)
 
   const copyToClipboard = async () => {
