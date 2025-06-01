@@ -1,10 +1,10 @@
 {
-  "name": "image-next",
+  "name": "imaginex",
   "description": "Un kit de componentes para React basado en TypeScript.",
   "author": "Genaro Gonzalez",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "0.1.15",
+  "version": "0.1.19",
   "files": [
     "src/app/api",
     "fn/postinstall.js",

@@ -1,4 +1,3 @@
-
 "use client"
 
 import React from 'react';
@@ -30,7 +29,7 @@ const DEFAULT_PROPS = {
 
 const Img: React.FC<ImgProps> = (props) => {
   const {
-    type,
+    type = 'local', // Default to 'local' if not specified
     children,
     ...userProps
   } = props;
@@ -49,7 +48,7 @@ const Img: React.FC<ImgProps> = (props) => {
   } as const;
 
   // Validation
-  if (!type || !(type in componentMap)) {
+  if (!(type in componentMap)) {
     console.error(`Invalid image type: ${type}. Expected: 'remote', 'local', or 'bg'`);
     return null;
   }

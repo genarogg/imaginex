@@ -185,7 +185,7 @@ export default withPlaiceholder(config);`}
                 <h4 className="text-lg font-medium text-gray-900 mb-3">Standard Display</h4>
                 <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <Img
-                    type="local"
+
                     src={imgLocal}
                     alt="Local image example"
                     width={400}
@@ -218,7 +218,7 @@ export default withPlaiceholder(config);`}
                 {`import imgLocal from "./path/to/image.jpg";
 
 <Img 
-  type="local" 
+   
   src={imgLocal} 
   alt="Local image" 
   width={400} 

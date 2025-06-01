@@ -11,37 +11,40 @@ function moveApiFolder() {
     return true;
   }
 
-  const sourceApiPath = path.join(__dirname, 'api');
+  // Encontrar la raíz del proyecto (donde está package.json)
+  const projectRoot = findProjectRoot();
+  const sourceApiPath = path.join(__dirname, '..', 'src', 'app', 'api');
   
-  // Verificar si la carpeta API fuente existe
+  // Verificar si la carpeta API fuente existe, si no, crearla
   if (!fs.existsSync(sourceApiPath)) {
     console.log('❌ No se encontró la carpeta API en la ubicación esperada:', sourceApiPath);
-    return false;
+    console.log('🛠️ Creando carpeta API en la ubicación esperada...');
+    fs.mkdirSync(sourceApiPath, { recursive: true });
+    console.log('✅ Carpeta API creada exitosamente:', sourceApiPath);
   }
 
-  // Posibles ubicaciones de destino ordenadas por prioridad
+  // Posibles ubicaciones de destino ordenadas por prioridad (desde la raíz del proyecto)
   const possibleDestinations = [
     // Estructura con src/app (más común en proyectos nuevos)
-    '../../src/app/api',
+    path.join(projectRoot, 'src/app/api'),
     // Estructura con app en raíz
-    '../../app/api',
+    path.join(projectRoot, 'app/api'),
     // Estructura con src/pages (menos común pero posible)
-    '../../src/pages/api',
+    path.join(projectRoot, 'src/pages/api'),
     // Estructura con pages en raíz
-    '../../pages/api'
+    path.join(projectRoot, 'pages/api')
   ];
 
   let targetPath = null;
 
   // Buscar la estructura correcta del proyecto
   for (const destination of possibleDestinations) {
-    const fullPath = path.resolve(__dirname, destination);
-    const parentDir = path.dirname(fullPath);
+    const parentDir = path.dirname(destination);
     
     // Verificar si el directorio padre existe (src/app, app, src/pages, pages)
     if (fs.existsSync(parentDir)) {
-      targetPath = fullPath;
-      console.log(`✅ Estructura detectada: ${parentDir}`);
+      targetPath = destination;
+      console.log(`✅ Estructura detectada: ${path.relative(projectRoot, parentDir)}`);
       break;
     }
   }
@@ -50,9 +53,9 @@ function moveApiFolder() {
     console.log('❌ No se pudo detectar una estructura válida de Next.js (app o pages)');
     console.log('Estructuras buscadas:');
     possibleDestinations.forEach(dest => {
-      const fullPath = path.resolve(__dirname, dest);
-      const parentDir = path.dirname(fullPath);
-      console.log(`  - ${parentDir} (${fs.existsSync(parentDir) ? 'existe' : 'no existe'})`);
+      const parentDir = path.dirname(dest);
+      const relativePath = path.relative(projectRoot, parentDir);
+      console.log(`  - ${relativePath} (${fs.existsSync(parentDir) ? 'existe' : 'no existe'})`);
     });
     return false;
   }
@@ -87,6 +90,42 @@ function moveApiFolder() {
     console.error('❌ Error al mover la carpeta API:', error.message);
     return false;
   }
+}
+
+/**
+ * Encuentra la raíz del proyecto (donde está el package.json principal)
+ */
+function findProjectRoot() {
+  let currentDir = process.cwd();
+  
+  // Si estamos ejecutando desde node_modules, ir hacia arriba
+  if (currentDir.includes('node_modules')) {
+    // Buscar el primer directorio que contenga package.json y que NO esté en node_modules
+    let searchDir = currentDir;
+    while (searchDir !== path.dirname(searchDir)) {
+      if (searchDir.includes('node_modules')) {
+        searchDir = path.dirname(searchDir);
+        continue;
+      }
+      
+      if (fs.existsSync(path.join(searchDir, 'package.json'))) {
+        return searchDir;
+      }
+      
+      searchDir = path.dirname(searchDir);
+    }
+  }
+  
+  // Si no estamos en node_modules, buscar package.json hacia arriba
+  while (currentDir !== path.dirname(currentDir)) {
+    if (fs.existsSync(path.join(currentDir, 'package.json'))) {
+      return currentDir;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  
+  // Fallback al directorio actual
+  return process.cwd();
 }
 
 /**
@@ -187,19 +226,22 @@ function moveDirectory(source, destination) {
  * Función para detectar la estructura del proyecto Next.js
  */
 function detectNextStructure() {
+  const projectRoot = findProjectRoot();
   const structures = [
-    { path: '../../src/app', name: 'src/app (App Router)' },
-    { path: '../../app', name: 'app (App Router)' },
-    { path: '../../src/pages', name: 'src/pages (Pages Router)' },
-    { path: '../../pages', name: 'pages (Pages Router)' }
+    { path: path.join(projectRoot, 'src/app'), name: 'src/app (App Router)' },
+    { path: path.join(projectRoot, 'app'), name: 'app (App Router)' },
+    { path: path.join(projectRoot, 'src/pages'), name: 'src/pages (Pages Router)' },
+    { path: path.join(projectRoot, 'pages'), name: 'pages (Pages Router)' }
   ];
 
   console.log('🔍 Detectando estructura del proyecto Next.js...');
+  console.log(`📁 Raíz del proyecto: ${projectRoot}`);
+  console.log('');
   
   structures.forEach(structure => {
-    const fullPath = path.resolve(__dirname, structure.path);
-    const exists = fs.existsSync(fullPath);
-    console.log(`  ${exists ? '✅' : '❌'} ${structure.name}: ${fullPath}`);
+    const exists = fs.existsSync(structure.path);
+    const relativePath = path.relative(projectRoot, structure.path);
+    console.log(`  ${exists ? '✅' : '❌'} ${structure.name}: ./${relativePath}`);
   });
 }
 
@@ -238,6 +280,7 @@ module.exports = {
   moveApiFolder,
   detectNextStructure,
   isProduction,
+  findProjectRoot,
   main
 };
 
