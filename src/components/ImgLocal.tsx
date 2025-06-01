@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import ImgProps from './ImgProps';
+import { calculateDimensions } from './utils/calculateDimensions';
 
-const Img: React.FC<ImgProps> = ({
+const ImgLocal: React.FC<ImgProps> = ({
     src,
     alt,
     id,
@@ -25,6 +26,7 @@ const Img: React.FC<ImgProps> = ({
     const [isLoaded, setIsLoaded] = useState(false);
     const [hasError, setHasError] = useState(false);
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+    
     const imgRef = useRef<HTMLDivElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,56 +72,22 @@ const Img: React.FC<ImgProps> = ({
         return cleanup;
     }, [priority, visible, cleanup]);
 
-    // Calculate responsive dimensions maintaining aspect ratio
-    const calculateDimensions = useCallback((naturalWidth: number, naturalHeight: number) => {
-        if (!maintainAspectRatio) {
-            return { width: width || naturalWidth, height: height || naturalHeight };
-        }
-
-        const aspectRatio = naturalWidth / naturalHeight;
-        
-        // Si se proporciona tanto width como height, usar el que resulte en menor tamaño
-        if (width && height) {
-            const widthByHeight = (height as number) * aspectRatio;
-            const heightByWidth = (width as number) / aspectRatio;
-            
-            if (widthByHeight <= (width as number)) {
-                return { width: widthByHeight, height: height as number };
-            } else {
-                return { width: width as number, height: heightByWidth };
-            }
-        }
-        
-        // Si solo se proporciona width
-        if (width && !height) {
-            return { 
-                width: width as number, 
-                height: (width as number) / aspectRatio 
-            };
-        }
-        
-        // Si solo se proporciona height
-        if (height && !width) {
-            return { 
-                width: (height as number) * aspectRatio, 
-                height: height as number 
-            };
-        }
-        
-        // Si no se proporciona ninguna dimensión, usar las naturales
-        return { width: naturalWidth, height: naturalHeight };
-    }, [width, height, maintainAspectRatio]);
-
     // Handle image load and styling
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
         const img = event.currentTarget;
         const naturalWidth = img.naturalWidth;
         const naturalHeight = img.naturalHeight;
         
-        // Calcular dimensiones manteniendo proporción
-        const calculatedDimensions = calculateDimensions(naturalWidth, naturalHeight);
-        setImageDimensions(calculatedDimensions);
+        // Usar la función utilitaria para calcular dimensiones
+        const calculatedDimensions = calculateDimensions({
+            naturalWidth,
+            naturalHeight,
+            width,
+            height,
+            maintainAspectRatio
+        });
         
+        setImageDimensions(calculatedDimensions);
         setIsLoaded(true);
         setHasError(false);
 
@@ -145,7 +113,7 @@ const Img: React.FC<ImgProps> = ({
                 }, 500);
             }
         });
-    }, [id, calculateDimensions]);
+    }, [id, width, height, maintainAspectRatio]);
 
     const handleImageError = useCallback(() => {
         setHasError(true);
@@ -253,4 +221,4 @@ const Img: React.FC<ImgProps> = ({
     );
 };
 
-export default Img;
+export default ImgLocal;

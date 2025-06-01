@@ -15,7 +15,6 @@ interface ImgProps {
     style?: any;
     children?: React.ReactNode;
     visible?: boolean;
-
     objectFit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
     maintainAspectRatio?: boolean;
 }

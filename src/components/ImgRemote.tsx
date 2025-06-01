@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import ImgProps from './ImgProps';
 import svg from './svg';
+import { calculateDimensions } from './utils/calculateDimensions';
 
-interface ExtendedImgProps extends ImgProps {
+interface ExtendedImgRemoteProps extends ImgProps {
     children?: React.ReactNode;
     transitionDuration?: number;
     fetchTimeout?: number;
@@ -16,7 +17,7 @@ interface ExtendedImgProps extends ImgProps {
     maintainAspectRatio?: boolean;
 }
 
-const Img: React.FC<ExtendedImgProps> = ({
+const ImgRemote: React.FC<ExtendedImgRemoteProps> = ({
     src,
     alt,
     id,
@@ -70,46 +71,6 @@ const Img: React.FC<ExtendedImgProps> = ({
         }
     }, []);
 
-    // Calculate responsive dimensions maintaining aspect ratio
-    const calculateDimensions = useCallback((naturalWidth: number, naturalHeight: number) => {
-        if (!maintainAspectRatio) {
-            return { width: width || naturalWidth, height: height || naturalHeight };
-        }
-
-        const aspectRatio = naturalWidth / naturalHeight;
-        
-        // Si se proporciona tanto width como height, usar el que resulte en menor tamaño
-        if (width && height) {
-            const widthByHeight = (height as number) * aspectRatio;
-            const heightByWidth = (width as number) / aspectRatio;
-            
-            if (widthByHeight <= (width as number)) {
-                return { width: widthByHeight, height: height as number };
-            } else {
-                return { width: width as number, height: heightByWidth };
-            }
-        }
-        
-        // Si solo se proporciona width
-        if (width && !height) {
-            return { 
-                width: width as number, 
-                height: (width as number) / aspectRatio 
-            };
-        }
-        
-        // Si solo se proporciona height
-        if (height && !width) {
-            return { 
-                width: (height as number) * aspectRatio, 
-                height: height as number 
-            };
-        }
-        
-        // Si no se proporciona ninguna dimensión, usar las naturales
-        return { width: naturalWidth, height: naturalHeight };
-    }, [width, height, maintainAspectRatio]);
-
     // Fetch base64 for remote images
     const fetchRemoteBase64 = useCallback(async (imageUrl: string) => {
         try {
@@ -134,7 +95,6 @@ const Img: React.FC<ExtendedImgProps> = ({
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                // Silently handle API errors and fallback to direct loading
                 throw new Error(`API request failed with status: ${response.status}`);
             }
 
@@ -153,7 +113,6 @@ const Img: React.FC<ExtendedImgProps> = ({
             const err = error as Error;
             
             // Silently fall back to direct image loading without blur effect
-            // Only log in development mode
             if (process.env.NODE_ENV === 'development') {
                 console.warn('Base64 fetch failed, falling back to direct loading:', err.message);
             }
@@ -183,10 +142,16 @@ const Img: React.FC<ExtendedImgProps> = ({
         const naturalWidth = img.naturalWidth;
         const naturalHeight = img.naturalHeight;
         
-        // Calcular dimensiones manteniendo proporción
-        const calculatedDimensions = calculateDimensions(naturalWidth, naturalHeight);
-        setImageDimensions(calculatedDimensions);
+        // Usar la función utilitaria para calcular dimensiones
+        const calculatedDimensions = calculateDimensions({
+            naturalWidth,
+            naturalHeight,
+            width,
+            height,
+            maintainAspectRatio
+        });
         
+        setImageDimensions(calculatedDimensions);
         setIsImageLoaded(true);
         
         if (!id) return;
@@ -212,7 +177,7 @@ const Img: React.FC<ExtendedImgProps> = ({
                 }, transitionDuration);
             }
         });
-    }, [id, transitionDuration, onLoadComplete, calculateDimensions]);
+    }, [id, transitionDuration, onLoadComplete, width, height, maintainAspectRatio]);
 
     const handleImageError = useCallback((error: React.SyntheticEvent<HTMLImageElement, Event>) => {
         const err = new Error(`Failed to load image: ${src}`);
@@ -350,4 +315,4 @@ const Img: React.FC<ExtendedImgProps> = ({
     );
 };
 
-export default Img;
+export default ImgRemote;

@@ -6,89 +6,46 @@ import ImgLocal from './ImgLocal';
 import ImgBG from './ImgBG';
 import ImgProps from './ImgProps';
 
+const Img: React.FC<ImgProps> = (props) => {
+    const {
+        type,
+        children,
+        ...commonProps
+    } = props;
 
-const Img: React.FC<ImgProps> = ({
-    src,
-    alt,
-    id,
-    type,
-    blurDataURL,
-    placeholder = 'blur',
-    width = 1920 / 2,
-    height = 1080 / 2,
-    className = "",
-    priority = false,
-    loading = 'lazy',
-    quality = 90,
-    sizes,
-    style,
-    children,
-    visible = true
-}) => {
+    // Props por defecto centralizados
+    const defaultProps = {
+        placeholder: 'blur' as const,
+        width: 960,
+        height: 540,
+        className: "",
+        priority: false,
+        loading: 'lazy' as const,
+        quality: 90,
+        visible: true,
+        ...commonProps
+    };
 
-    switch (type) {
-        case 'remote':
-            return (
-                <ImgRemote
-                    src={src}
-                    alt={alt}
-                    id={id}
-                    width={width}
-                    height={height}
-                    className={className}
-                    blurDataURL={blurDataURL}
-                    placeholder={placeholder}
-                    priority={priority}
-                    loading={loading}
-                    quality={quality}
-                    sizes={sizes}
-                    style={style}
-                />
-            );
+    const componentMap = {
+        remote: ImgRemote,
+        local: ImgLocal,
+        bg: ImgBG
+    } as const;
 
-        case 'local':
-            return (
-                <ImgLocal
-                    src={src}
-                    alt={alt}
-                    id={id}
-                    width={width}
-                    height={height}
-                    className={className}
-                    blurDataURL={blurDataURL}
-                    placeholder={placeholder}
-                    priority={priority}
-                    loading={loading}
-                    quality={quality}
-                    sizes={sizes}
-                    style={style}
-                    visible={visible}
-                />
-
-            );
-        case 'bg':
-            return (
-                <ImgBG
-                    src={src}
-                    alt={alt}
-                    id={id}
-                    width={width}
-                    height={height}
-                    className={className}
-                    blurDataURL={blurDataURL}
-                    placeholder={placeholder}
-                    priority={priority}
-                    loading={loading}
-                    quality={quality}
-                    sizes={sizes}
-                    style={style}
-                >
-                    {children}
-                </ImgBG>
-            )
-        default:
-            return <>sucedio un error en img switch</>;
+    if (!type || !(type in componentMap)) {
+        console.error(`Tipo de imagen no válido: ${type}`);
+        return null;
     }
+
+    const Component = componentMap[type];
+
+    return type === 'bg' ? (
+        <Component {...defaultProps}>
+            {children}
+        </Component>
+    ) : (
+        <Component {...defaultProps} />
+    );
 };
 
 export default Img;
