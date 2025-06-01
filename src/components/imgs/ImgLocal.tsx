@@ -5,6 +5,7 @@ import Image from 'next/image';
 import ImgProps from '../utils/ImgProps';
 import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
 import ImageError from '../utils/ImageError';
+import { calculateDimensions } from '../utils/calculateDimensions';
 
 const ImgLocal: React.FC<ImgProps> = ({
     src,
@@ -44,15 +45,34 @@ const ImgLocal: React.FC<ImgProps> = ({
         ghost: id ? `${id}Ghost` : undefined
     }), [id]);
 
-    // Memoizar dimensiones del contenedor
+    // NUEVO: Calcular dimensiones iniciales basadas en props
+    const initialDimensions = useMemo(() => {
+        if (maintainAspectRatio && src?.width && src?.height) {
+            // Si tenemos dimensiones de la imagen estática, calcular desde el inicio
+            return calculateDimensions({
+                naturalWidth: src.width,
+                naturalHeight: src.height,
+                width,
+                height,
+                maintainAspectRatio
+            });
+        }
+        // Usar dimensiones proporcionadas como fallback
+        return { 
+            width: typeof width === 'number' ? width : 960, 
+            height: typeof height === 'number' ? height : 540 
+        };
+    }, [src, width, height, maintainAspectRatio]);
+
+    // MODIFICADO: Usar dimensiones iniciales para evitar layout shift
     const containerDimensions = useMemo(() => 
-        imageState.isLoaded && maintainAspectRatio 
+        imageState.isLoaded && imageState.imageDimensions.width > 0
             ? imageState.imageDimensions 
-            : { width, height },
-        [imageState.isLoaded, imageState.imageDimensions, maintainAspectRatio, width, height]
+            : initialDimensions,
+        [imageState.isLoaded, imageState.imageDimensions, initialDimensions]
     );
 
-    // Memoizar dimensiones de la imagen
+    // Memoizar dimensiones de la imagen (sin cambios)
     const imageDimensions = useMemo(() => ({
         width: maintainAspectRatio && imageState.isLoaded 
             ? imageState.imageDimensions.width 
@@ -141,24 +161,50 @@ const ImgLocal: React.FC<ImgProps> = ({
         return cleanup;
     }, [priority, visible, cleanup, observerOptions, updateImageState]);
 
-    // Handle image load optimizado
+    // MODIFICADO: Handle image load con prevención de layout shift
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+        const img = event.currentTarget;
+        const naturalWidth = img.naturalWidth;
+        const naturalHeight = img.naturalHeight;
+
+        // Solo calcular nuevas dimensiones si hay diferencia significativa
+        const newDimensions = calculateDimensions({
+            naturalWidth,
+            naturalHeight,
+            width,
+            height,
+            maintainAspectRatio
+        });
+
+        // NUEVO: Solo actualizar si las dimensiones cambian significativamente (>2px)
+        const shouldUpdateDimensions = Math.abs(newDimensions.width - containerDimensions.width) > 2 || 
+                                     Math.abs(newDimensions.height - containerDimensions.height) > 2;
+
+        if (shouldUpdateDimensions && maintainAspectRatio) {
+            updateImageState({
+                imageDimensions: newDimensions,
+                isLoaded: true,
+                hasError: false
+            });
+        } else {
+            // Si no hay cambio significativo, solo marcar como cargado
+            updateImageState({
+                isLoaded: true,
+                hasError: false
+            });
+        }
+
+        // MODIFICADO: Llamar al handler original sin permitir cambios DOM abruptos
         handleImageLoadUtil({
             event,
             id,
             width,
             height,
-            maintainAspectRatio,
+            maintainAspectRatio: false, // Prevenir cambios DOM desde el handler
             componentType: 'local',
-            onDimensionsCalculated: (dimensions) => {
-                updateImageState({
-                    imageDimensions: dimensions,
-                    isLoaded: true,
-                    hasError: false
-                });
-            }
+            onDimensionsCalculated: () => {}, // No hacer nada aquí
         });
-    }, [id, width, height, maintainAspectRatio, updateImageState]);
+    }, [id, width, height, maintainAspectRatio, updateImageState, containerDimensions]);
 
     const handleImageError = useCallback(() => {
         updateImageState({ 

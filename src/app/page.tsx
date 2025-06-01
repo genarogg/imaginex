@@ -3,7 +3,7 @@ import React from "react"
 import Img from "@/components"
 import imgLocal from "../../public/nanify.webp"
 import { useLanguage } from "@/hooks/useLanguage"
-import { getTranslation, type TranslationKey } from "@/utils/translations"
+import { getTranslation } from "@/utils/translations"
 import LanguageToggle from "@/components/docs/LanguageToggle"
 import TableOfContents from "@/components/docs/TableOfContents"
 import CodeBlock from "@/components/docs/CodeBlock"
@@ -12,7 +12,7 @@ import FeatureGrid from "@/components/docs/FeatureGrid"
 
 const DocumentationPage: React.FC = () => {
   const { language, changeLanguage } = useLanguage()
-  const t = (key: TranslationKey) => getTranslation(language, key)
+  const t = (key: any) => getTranslation(language, key)
 
   const remoteImageUrl =
     "https://images.unsplash.com/photo-1560707303-4e980ce876ad?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTR8fHNvdXJjZXxlbnwwfHwwfHx8MA%3D%3D"

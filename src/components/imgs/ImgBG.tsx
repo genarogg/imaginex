@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { ImgBGProps } from '../utils/ImgProps';
-import { handleBackgroundImageLoad } from '../utils/handleImageLoadUtil';
+
 import ImageError from '../utils/ImageError';
 
 const ImgBG: React.FC<ImgBGProps> = ({
@@ -25,16 +25,13 @@ const ImgBG: React.FC<ImgBGProps> = ({
     removeDelay = 1500,
     backgroundSize = 'cover',
     backgroundPosition = 'center',
-    maintainAspectRatio = true
 }) => {
-    // Estados consolidados en un solo objeto para reducir renders
+    // Estados consolidados
     const [imageState, setImageState] = useState({
         isLoaded: false,
         hasError: false,
         finalImageSrc: '',
-        imageDimensions: { width: 0, height: 0 },
-        containerDimensions: { width, height },
-        calculatedBackgroundSize: backgroundSize
+        showImage: false
     });
 
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,6 +49,16 @@ const ImgBG: React.FC<ImgBGProps> = ({
         image: id ? `${id}Img` : undefined
     }), [id]);
 
+    // Calcular dimensiones finales desde el inicio - ESTO ES CLAVE
+    const finalDimensions = useMemo(() => {
+        // Para background images, siempre usar las dimensiones proporcionadas
+        // No cambiar después de la carga para evitar layout shift
+        return {
+            width: typeof width === 'number' ? width : (typeof width === 'string' ? parseInt(width) : 960),
+            height: typeof height === 'number' ? height : (typeof height === 'string' ? parseInt(height) : 540)
+        };
+    }, [width, height]);
+
     // Cleanup optimizado
     const cleanup = useCallback(() => {
         if (timeoutRef.current) {
@@ -67,63 +74,43 @@ const ImgBG: React.FC<ImgBGProps> = ({
         setImageState(prev => ({ ...prev, ...updates }));
     }, []);
 
-    // Handle image load optimizado
+    // Handle image load - SIMPLIFICADO para evitar cambios de dimensiones
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
-        handleBackgroundImageLoad({
-            event,
-            width,
-            height,
-            maintainAspectRatio,
-            backgroundSize,
-            onImageLoaded: (imageSrc, imageDimensions, containerDimensions, calculatedBackgroundSize) => {
-                updateImageState({
-                    imageDimensions,
-                    containerDimensions,
-                    calculatedBackgroundSize,
-                    finalImageSrc: imageSrc,
-                    isLoaded: true,
-                    hasError: false
-                });
+        const img = event.currentTarget;
+        const imageSrc = img.src;
 
-                // Delay removal optimizado
-                timeoutRef.current = setTimeout(() => {
-                    imgRef.current?.remove();
-                    imgRef.current = null;
-                }, removeDelay);
-            }
+        // Solo actualizar el src y marcar como cargado
+        // NO recalcular dimensiones para evitar layout shift
+        updateImageState({
+            finalImageSrc: imageSrc,
+            isLoaded: true,
+            hasError: false,
+            showImage: true
         });
-    }, [removeDelay, width, height, maintainAspectRatio, backgroundSize, updateImageState]);
+
+        // Delay removal optimizado
+        timeoutRef.current = setTimeout(() => {
+            if (imgRef.current) {
+                imgRef.current.remove();
+                imgRef.current = null;
+            }
+        }, removeDelay);
+    }, [removeDelay, updateImageState]);
 
     const handleImageError = useCallback(() => {
         updateImageState({ hasError: true });
         console.error(`Failed to load background image: ${src}`);
     }, [src, updateImageState]);
 
-    // Memoizar dimensiones finales
-    const finalDimensions = useMemo(() => 
-        maintainAspectRatio && imageState.isLoaded
-            ? imageState.containerDimensions
-            : { width, height },
-        [maintainAspectRatio, imageState.isLoaded, imageState.containerDimensions, width, height]
-    );
-
-    // Memoizar background size final
-    const finalBackgroundSize = useMemo(() =>
-        maintainAspectRatio && imageState.isLoaded
-            ? imageState.calculatedBackgroundSize
-            : backgroundSize,
-        [maintainAspectRatio, imageState.isLoaded, imageState.calculatedBackgroundSize, backgroundSize]
-    );
-
     // Memoizar estilos base de background
     const baseBackgroundStyles = useMemo(() => ({
-        backgroundSize: finalBackgroundSize,
+        backgroundSize,
         backgroundPosition,
         backgroundRepeat: 'no-repeat' as const,
         backgroundAttachment,
-    }), [finalBackgroundSize, backgroundPosition, backgroundAttachment]);
+    }), [backgroundSize, backgroundPosition, backgroundAttachment]);
 
-    // Memoizar estilos del contenedor principal
+    // Memoizar estilos del contenedor principal - DIMENSIONES FIJAS
     const containerStyles = useMemo(() => ({
         ...baseBackgroundStyles,
         backgroundImage: blurUrl ? `url(${blurUrl})` : 'none',
@@ -133,35 +120,29 @@ const ImgBG: React.FC<ImgBGProps> = ({
         overflow: 'hidden',
     }), [baseBackgroundStyles, blurUrl, finalDimensions]);
 
-    // Memoizar estilos del contenido principal
+    // Memoizar estilos del contenido principal - DIMENSIONES FIJAS
     const contentStyles = useMemo(() => ({
         ...baseBackgroundStyles,
-        backgroundImage: imageState.isLoaded && imageState.finalImageSrc
+        backgroundImage: imageState.showImage && imageState.finalImageSrc
             ? `url(${imageState.finalImageSrc})`
-            : blurUrl ? `url(${blurUrl})` : 'none',
+            : 'none',
         width: finalDimensions.width,
         height: finalDimensions.height,
         position: 'absolute' as const,
         top: 0,
         left: 0,
-        opacity: imageState.isLoaded ? 1 : 0.8,
-        transition: `all ${transitionDuration}ms ease-in-out`,
+        opacity: imageState.isLoaded ? 1 : 0,
+        transition: `opacity ${transitionDuration}ms ease-in-out`,
         ...style
     }), [
         baseBackgroundStyles, 
-        imageState.isLoaded, 
+        imageState.showImage, 
         imageState.finalImageSrc, 
-        blurUrl, 
         finalDimensions, 
+        imageState.isLoaded,
         transitionDuration, 
         style
     ]);
-
-    // Memoizar dimensiones de la imagen oculta
-    const hiddenImageDimensions = useMemo(() => ({
-        width: maintainAspectRatio ? (imageState.imageDimensions.width || width) : width,
-        height: maintainAspectRatio ? (imageState.imageDimensions.height || height) : height
-    }), [maintainAspectRatio, imageState.imageDimensions, width, height]);
 
     // Early return para estado de error
     if (imageState.hasError) {
@@ -194,8 +175,8 @@ const ImgBG: React.FC<ImgBGProps> = ({
                     id={ids.image}
                     placeholder={placeholder}
                     blurDataURL={blurUrl}
-                    width={hiddenImageDimensions.width}
-                    height={hiddenImageDimensions.height}
+                    width={finalDimensions.width}
+                    height={finalDimensions.height}
                     loading={loading}
                     priority={priority}
                     quality={quality}
@@ -214,14 +195,14 @@ const ImgBG: React.FC<ImgBGProps> = ({
                 />
             )}
 
-            {/* Background Container */}
+            {/* Background Container - DIMENSIONES FIJAS */}
             <div
                 className="responsiveImage"
                 style={containerStyles}
                 role="img"
                 aria-label={alt}
             >
-                {/* Main Content Container */}
+                {/* Main Content Container - DIMENSIONES FIJAS */}
                 <div
                     id={ids.container}
                     className={`${className} responsiveImage ${imageState.isLoaded ? 'fadeIn' : ''}`}

@@ -1,4 +1,3 @@
-
 import { calculateDimensions, calculateBackgroundDimensions } from './calculateDimensions';
 
 export interface ImageLoadHandlerParams {
@@ -41,19 +40,40 @@ export const handleImageLoad = ({
   const naturalWidth = img.naturalWidth;
   const naturalHeight = img.naturalHeight;
   
-  // Calcular dimensiones usando la función utilitaria
-  const calculatedDimensions = calculateDimensions({
-    naturalWidth,
-    naturalHeight,
-    width,
-    height,
-    maintainAspectRatio
-  });
+  // Solo calcular dimensiones si maintainAspectRatio está habilitado
+  // Si no, usar las dimensiones proporcionadas originalmente
+  let calculatedDimensions;
   
-  // Notificar las dimensiones calculadas
-  onDimensionsCalculated?.(calculatedDimensions);
+  if (maintainAspectRatio) {
+    calculatedDimensions = calculateDimensions({
+      naturalWidth,
+      naturalHeight,
+      width,
+      height,
+      maintainAspectRatio
+    });
+  } else {
+    // Usar dimensiones originales sin recalcular
+    calculatedDimensions = {
+      width: width || naturalWidth,
+      height: height || naturalHeight
+    };
+  }
   
-  if (!id) return;
+  // Notificar las dimensiones calculadas solo si son diferentes a las originales
+  const dimensionsChanged = (
+    maintainAspectRatio && 
+    (calculatedDimensions.width !== width || calculatedDimensions.height !== height)
+  );
+  
+  if (dimensionsChanged) {
+    onDimensionsCalculated?.(calculatedDimensions);
+  }
+  
+  if (!id) {
+    onLoadComplete?.();
+    return;
+  }
 
   // Usar requestAnimationFrame para mejor performance
   requestAnimationFrame(() => {
@@ -62,19 +82,27 @@ export const handleImageLoad = ({
     const ghost = document.getElementById(`${id}Ghost`);
 
     if (imgElement && container && ghost) {
-      const { width: calcWidth, height: calcHeight } = calculatedDimensions;
-
-      // Actualizar DOM con dimensiones calculadas
-      container.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
-      ghost.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
+      // Solo actualizar dimensiones del DOM si realmente cambiaron
+      if (dimensionsChanged) {
+        const { width: calcWidth, height: calcHeight } = calculatedDimensions;
+        container.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
+        ghost.style.cssText += `width: ${calcWidth}px; height: ${calcHeight}px;`;
+      }
+      
+      // Mostrar imagen con transición suave
       imgElement.style.opacity = '1';
 
       // Remover background con delay para transición suave
       const delay = componentType === 'remote' ? transitionDuration : 500;
       setTimeout(() => {
-        container.style.backgroundImage = 'none';
+        if (container.style.backgroundImage) {
+          container.style.backgroundImage = 'none';
+        }
         onLoadComplete?.();
       }, delay);
+    } else {
+      // Si no hay elementos DOM, solo completar la carga
+      onLoadComplete?.();
     }
   });
 };
@@ -97,20 +125,41 @@ export const handleBackgroundImageLoad = ({
 
   if (!imageSrc) return;
 
-  // Usar la función utilitaria para calcular dimensiones y backgroundSize
-  const calculatedDimensions = calculateBackgroundDimensions({
-    naturalWidth,
-    naturalHeight,
-    width,
-    height,
-    maintainAspectRatio,
-    backgroundSize
-  });
-
-  const containerDimensions = {
-    width: calculatedDimensions.width,
-    height: calculatedDimensions.height
-  };
+  // Para backgrounds, ser más conservador con los cambios de dimensiones
+  let calculatedDimensions;
+  let containerDimensions;
+  
+  if (maintainAspectRatio && width && height) {
+    // Solo recalcular si se proporcionaron ambas dimensiones
+    calculatedDimensions = calculateBackgroundDimensions({
+      naturalWidth,
+      naturalHeight,
+      width,
+      height,
+      maintainAspectRatio,
+      backgroundSize
+    });
+    
+    containerDimensions = {
+      width: calculatedDimensions.width,
+      height: calculatedDimensions.height
+    };
+  } else {
+    // Usar dimensiones proporcionadas o naturales sin recalcular
+    const finalWidth = typeof width === 'number' ? width : naturalWidth;
+    const finalHeight = typeof height === 'number' ? height : naturalHeight;
+    
+    containerDimensions = {
+      width: finalWidth,
+      height: finalHeight
+    };
+    
+    calculatedDimensions = {
+      width: finalWidth,
+      height: finalHeight,
+      backgroundSize
+    };
+  }
 
   const imageDimensions = {
     width: naturalWidth,

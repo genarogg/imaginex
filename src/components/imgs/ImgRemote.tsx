@@ -6,6 +6,7 @@ import { ImgRemoteProps } from '../utils/ImgProps';
 import svg from '../svg';
 import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
 import { fetchRemoteBase64 } from '../utils/fetchRemoteBase64Util';
+import { calculateDimensions } from '../utils/calculateDimensions';
 import ImageError from '../utils/ImageError';
 
 const ImgRemote: React.FC<ImgRemoteProps> = ({
@@ -31,19 +32,30 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
     objectFit = 'cover',
     maintainAspectRatio = true
 }) => {
+    // Pre-calcular dimensiones iniciales para evitar layout shift
+    const initialDimensions = useMemo(() => {
+        if (!maintainAspectRatio) {
+            return { width: width || 0, height: height || 0 };
+        }
+        // Para mantener aspect ratio, usar las dimensiones proporcionadas inicialmente
+        return { width: width || 0, height: height || 0 };
+    }, [width, height, maintainAspectRatio]);
+
     // Estado consolidado para reducir re-renders
     const [imageState, setImageState] = useState({
         svgBackground: blurDataURL ? svg({ base64: blurDataURL }) : null,
         isLoaded: !blurDataURL,
         hasError: false,
         isImageLoaded: false,
-        imageDimensions: { width: 0, height: 0 }
+        // Usar dimensiones fijas inicialmente
+        imageDimensions: initialDimensions,
+        containerDimensions: initialDimensions
     });
 
     const imgRef = useRef<HTMLImageElement | null>(null);
 
     // Memoizar si es imagen remota
-    const isRemoteImage = useMemo(() => 
+    const isRemoteImage = useMemo(() =>
         typeof src === 'string' && src.startsWith('http'),
         [src]
     );
@@ -61,23 +73,17 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
         ghost: id ? `${id}Ghost` : undefined
     }), [id]);
 
-    // Memoizar dimensiones del contenedor
-    const containerDimensions = useMemo(() => 
-        imageState.isImageLoaded && maintainAspectRatio 
-            ? imageState.imageDimensions 
-            : { width, height },
-        [imageState.isImageLoaded, imageState.imageDimensions, maintainAspectRatio, width, height]
+    // Usar dimensiones fijas del contenedor para evitar layout shift
+    const containerDimensions = useMemo(() =>
+        imageState.containerDimensions,
+        [imageState.containerDimensions]
     );
 
-    // Memoizar dimensiones de la imagen
-    const imageDimensions = useMemo(() => ({
-        width: maintainAspectRatio && imageState.isImageLoaded 
-            ? imageState.imageDimensions.width 
-            : width,
-        height: maintainAspectRatio && imageState.isImageLoaded 
-            ? imageState.imageDimensions.height 
-            : height
-    }), [maintainAspectRatio, imageState.isImageLoaded, imageState.imageDimensions, width, height]);
+    // Dimensiones de la imagen - mantener consistencia
+    const imageDimensions = useMemo(() =>
+        imageState.imageDimensions,
+        [imageState.imageDimensions]
+    );
 
     // Memoizar duración de transiciones
     const transitionDurations = useMemo(() => ({
@@ -180,22 +186,44 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
         }
     }, [src, blurDataURL, handleFetchRemoteBase64, isRemoteImage]);
 
-    // Handle image load optimizado
+    // Handle image load optimizado - SIN cambiar dimensiones del DOM
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+        const img = event.currentTarget;
+        const naturalWidth = img.naturalWidth;
+        const naturalHeight = img.naturalHeight;
+
+        // Solo calcular dimensiones si maintainAspectRatio está habilitado
+        // y solo para actualizar el estado interno, NO el DOM
+        if (maintainAspectRatio) {
+            const calculatedDimensions = calculateDimensions({
+                naturalWidth,
+                naturalHeight,
+                width,
+                height,
+                maintainAspectRatio
+            });
+
+            // Actualizar solo el estado interno, mantener dimensiones del contenedor fijas
+            updateImageState({
+                imageDimensions: calculatedDimensions,
+                isImageLoaded: true
+            });
+        } else {
+            updateImageState({
+                isImageLoaded: true
+            });
+        }
+
+        // Llamar el handler original solo para efectos de transición, NO para cambiar dimensiones
         handleImageLoadUtil({
             event,
             id,
             width,
             height,
-            maintainAspectRatio,
+            maintainAspectRatio: false, // Importante: evitar cambios de dimensiones
             componentType: 'remote',
             transitionDuration,
-            onDimensionsCalculated: (dimensions) => {
-                updateImageState({
-                    imageDimensions: dimensions,
-                    isImageLoaded: true
-                });
-            },
+            onDimensionsCalculated: () => { }, // No hacer nada con las dimensiones
             onLoadComplete
         });
     }, [id, transitionDuration, onLoadComplete, width, height, maintainAspectRatio, updateImageState]);
