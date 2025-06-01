@@ -217,7 +217,16 @@ const BackgroundImageComponent: React.FC = () => (
                   {t("installationText")} <code className="bg-gray-100 px-2 py-1 rounded text-sm">next.config.ts</code>{" "}
                   {t("installationNote")}
                 </p>
-                <CodeBlock code={nextConfigCode} title="next.config.ts" />
+
+                <div className="mb-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">1. Install the packages</h3>
+                  <CodeBlock code="npm install imaginex @plaiceholder/next" title="Terminal" />
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">2. Configure Next.js</h3>
+                  <CodeBlock code={nextConfigCode} title="next.config.ts" />
+                </div>
               </div>
             </section>
 

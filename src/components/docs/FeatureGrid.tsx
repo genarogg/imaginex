@@ -1,4 +1,4 @@
-import type React from "react"
+import React from "react"
 import { getTranslation, type TranslationKey } from "@/utils/translations"
 import type { Language } from "@/hooks/useLanguage"
 
