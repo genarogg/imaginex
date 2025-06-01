@@ -164,6 +164,17 @@ const BackgroundImageComponent: React.FC = () => (
                   </svg>
                   {t("viewOnGithub")}
                 </a>
+                <a
+                  href="https://www.npmjs.com/package/imaginex"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0H1.763zM5.13 5.323l13.837.019-.009 5.183H13.82v.756h5.142v4.992h-2.262v1.312H4.096V5.323h1.034zm3.772 2.312v6.317h1.549V7.635H8.902zm2.581 0v6.317h1.549V7.635h-1.549z" />
+                  </svg>
+                  {t("viewOnNpm")}
+                </a>
                 <span className="text-sm text-gray-500">{t("starOnGithub")}</span>
               </div>
             </div>
