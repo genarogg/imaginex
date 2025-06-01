@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { ImgRemoteProps } from '../utils/ImgProps';
 import svg from '../svg';
@@ -31,50 +31,156 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
     objectFit = 'cover',
     maintainAspectRatio = true
 }) => {
-    const [svgBackground, setSvgBackground] = useState<string | null>(
-        blurDataURL ? svg({ base64: blurDataURL }) : null
-    );
-    const [isLoaded, setIsLoaded] = useState<boolean>(!blurDataURL);
-    const [hasError, setHasError] = useState<boolean>(false);
-    const [isImageLoaded, setIsImageLoaded] = useState<boolean>(false);
-    const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+    // Estado consolidado para reducir re-renders
+    const [imageState, setImageState] = useState({
+        svgBackground: blurDataURL ? svg({ base64: blurDataURL }) : null,
+        isLoaded: !blurDataURL,
+        hasError: false,
+        isImageLoaded: false,
+        imageDimensions: { width: 0, height: 0 }
+    });
 
     const imgRef = useRef<HTMLImageElement | null>(null);
 
-    // Check if this is a remote image
-    const isRemoteImage = typeof src === 'string' && src.startsWith('http');
+    // Memoizar si es imagen remota
+    const isRemoteImage = useMemo(() => 
+        typeof src === 'string' && src.startsWith('http'),
+        [src]
+    );
 
-    // Determine the actual placeholder and blurDataURL to use
-    const actualPlaceholder = (isRemoteImage && !blurDataURL && !svgBackground) ? 'empty' : placeholder;
-    const actualBlurDataURL = svgBackground || blurDataURL;
+    // Memoizar placeholder y blur data URL actuales
+    const imageConfig = useMemo(() => ({
+        actualPlaceholder: (isRemoteImage && !blurDataURL && !imageState.svgBackground) ? 'empty' : placeholder,
+        actualBlurDataURL: imageState.svgBackground || blurDataURL
+    }), [isRemoteImage, blurDataURL, imageState.svgBackground, placeholder]);
 
-    // Handle remote image base64 fetching
+    // Memoizar IDs únicos
+    const ids = useMemo(() => ({
+        container: id ? `${id}Container` : undefined,
+        img: id ? `${id}Img` : undefined,
+        ghost: id ? `${id}Ghost` : undefined
+    }), [id]);
+
+    // Memoizar dimensiones del contenedor
+    const containerDimensions = useMemo(() => 
+        imageState.isImageLoaded && maintainAspectRatio 
+            ? imageState.imageDimensions 
+            : { width, height },
+        [imageState.isImageLoaded, imageState.imageDimensions, maintainAspectRatio, width, height]
+    );
+
+    // Memoizar dimensiones de la imagen
+    const imageDimensions = useMemo(() => ({
+        width: maintainAspectRatio && imageState.isImageLoaded 
+            ? imageState.imageDimensions.width 
+            : width,
+        height: maintainAspectRatio && imageState.isImageLoaded 
+            ? imageState.imageDimensions.height 
+            : height
+    }), [maintainAspectRatio, imageState.isImageLoaded, imageState.imageDimensions, width, height]);
+
+    // Memoizar duración de transiciones
+    const transitionDurations = useMemo(() => ({
+        background: transitionDuration * 0.3,
+        opacity: transitionDuration * 0.7
+    }), [transitionDuration]);
+
+    // Memoizar estilos del contenedor principal
+    const containerStyles = useMemo(() => ({
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+        ...style
+    }), [containerDimensions, style]);
+
+    // Memoizar estilos del contenedor de background
+    const backgroundContainerStyles = useMemo(() => ({
+        backgroundImage: imageState.svgBackground ? `url(${imageState.svgBackground})` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+        transition: `background-image ${transitionDurations.background}ms ease-out`
+    }), [imageState.svgBackground, containerDimensions, transitionDurations.background]);
+
+    // Memoizar estilos de la imagen
+    const imageStyles = useMemo(() => ({
+        position: 'absolute' as const,
+        opacity: imageState.isImageLoaded ? 1 : 0,
+        transition: `opacity ${transitionDurations.opacity}ms ease-in-out`,
+        objectFit: objectFit,
+        width: '100%',
+        height: '100%'
+    }), [imageState.isImageLoaded, transitionDurations.opacity, objectFit]);
+
+    // Memoizar estilos del ghost div
+    const ghostStyles = useMemo(() => ({
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        pointerEvents: 'none' as const
+    }), [containerDimensions]);
+
+    // Memoizar estilos del estado de loading
+    const loadingStyles = useMemo(() => ({
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f9fafb',
+        ...style
+    }), [containerDimensions, style]);
+
+    // Handler consolidado para actualizar estado
+    const updateImageState = useCallback((updates: Partial<typeof imageState>) => {
+        setImageState(prev => ({ ...prev, ...updates }));
+    }, []);
+
+    // Handle remote image base64 fetching optimizado
     const handleFetchRemoteBase64 = useCallback(async (imageUrl: string) => {
-        const result = await fetchRemoteBase64({
-            imageUrl,
-            fetchTimeout,
-            onLoadStart,
-            onError
-        });
+        try {
+            const result = await fetchRemoteBase64({
+                imageUrl,
+                fetchTimeout,
+                onLoadStart,
+                onError
+            });
 
-        if (result.success && result.svgData) {
-            setSvgBackground(result.svgData);
-            setIsLoaded(false);
-        } else {
-            // Silently fall back to direct image loading without blur effect
-            setIsLoaded(true);
-            setSvgBackground(null);
+            if (result.success && result.svgData) {
+                updateImageState({
+                    svgBackground: result.svgData,
+                    isLoaded: false
+                });
+            } else {
+                // Silently fall back to direct image loading without blur effect
+                updateImageState({
+                    isLoaded: true,
+                    svgBackground: null
+                });
+            }
+        } catch (error) {
+            console.warn('Failed to fetch remote base64:', error);
+            updateImageState({
+                isLoaded: true,
+                svgBackground: null
+            });
         }
-    }, [fetchTimeout, onLoadStart, onError]);
+    }, [fetchTimeout, onLoadStart, onError, updateImageState]);
 
-    // Effect to handle remote image base64 fetching
+    // Effect optimizado para manejar fetching de imágenes remotas
     useEffect(() => {
         if (isRemoteImage && !blurDataURL) {
             handleFetchRemoteBase64(src);
         }
     }, [src, blurDataURL, handleFetchRemoteBase64, isRemoteImage]);
 
-    // Handle image load using utility function
+    // Handle image load optimizado
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
         handleImageLoadUtil({
             event,
@@ -85,31 +191,26 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
             componentType: 'remote',
             transitionDuration,
             onDimensionsCalculated: (dimensions) => {
-                setImageDimensions(dimensions);
-                setIsImageLoaded(true);
+                updateImageState({
+                    imageDimensions: dimensions,
+                    isImageLoaded: true
+                });
             },
             onLoadComplete
         });
-    }, [id, transitionDuration, onLoadComplete, width, height, maintainAspectRatio]);
+    }, [id, transitionDuration, onLoadComplete, width, height, maintainAspectRatio, updateImageState]);
 
+    // Handle image error optimizado
     const handleImageError = useCallback((error: React.SyntheticEvent<HTMLImageElement, Event>) => {
         const err = new Error(`Failed to load image: ${src}`);
         console.error('Image load error:', err);
-        setHasError(true);
+        updateImageState({ hasError: true });
         onError?.(err);
         console.error(`Error loading image: ${src}`, error);
-    }, [src, onError]);
+    }, [src, onError, updateImageState]);
 
-    // Generate safe IDs
-    const containerId = id ? `${id}Container` : undefined;
-    const imgId = id ? `${id}Img` : undefined;
-    const ghostId = id ? `${id}Ghost` : undefined;
-
-    // Get container dimensions
-    const containerDimensions = isImageLoaded && maintainAspectRatio ? imageDimensions : { width, height };
-
-    // Error state using reusable component
-    if (hasError) {
+    // Early return para estado de error
+    if (imageState.hasError) {
         return (
             <ImageError
                 width={containerDimensions.width}
@@ -124,21 +225,11 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
         );
     }
 
-    // Loading state without background
-    if (!svgBackground && !isLoaded && isRemoteImage) {
+    // Early return para estado de loading sin background
+    if (!imageState.svgBackground && !imageState.isLoaded && isRemoteImage) {
         return (
             <div
-                style={{
-                    width: containerDimensions.width,
-                    height: containerDimensions.height,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#f9fafb',
-                    ...style
-                }}
+                style={loadingStyles}
                 className={`responsiveImage ${className}`}
                 role="img"
                 aria-label={`Loading image: ${alt}`}
@@ -153,63 +244,36 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
 
     return (
         <div
-            style={{
-                width: containerDimensions.width,
-                height: containerDimensions.height,
-                position: 'relative',
-                overflow: 'hidden',
-                ...style
-            }}
+            style={containerStyles}
             className="responsiveImage"
         >
             <div
-                style={{
-                    backgroundImage: svgBackground ? `url(${svgBackground})` : 'none',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                    width: containerDimensions.width,
-                    height: containerDimensions.height,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: `background-image ${transitionDuration * 0.3}ms ease-out`
-                }}
+                style={backgroundContainerStyles}
                 className="responsiveImage"
-                id={containerId}
+                id={ids.container}
             >
                 <Image
                     ref={imgRef}
                     src={src}
                     alt={alt}
-                    id={imgId}
-                    className={`${className} responsiveImage ${isImageLoaded ? 'fadeIn' : ''}`}
-                    placeholder={actualPlaceholder}
-                    blurDataURL={actualBlurDataURL}
-                    width={maintainAspectRatio && isImageLoaded ? imageDimensions.width : width}
-                    height={maintainAspectRatio && isImageLoaded ? imageDimensions.height : height}
+                    id={ids.img}
+                    className={`${className} responsiveImage ${imageState.isImageLoaded ? 'fadeIn' : ''}`}
+                    placeholder={imageConfig.actualPlaceholder}
+                    blurDataURL={imageConfig.actualBlurDataURL}
+                    width={imageDimensions.width}
+                    height={imageDimensions.height}
                     loading={loading}
                     priority={priority}
                     quality={quality}
                     sizes={sizes}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
-                    style={{
-                        position: 'absolute',
-                        opacity: isImageLoaded ? 1 : 0,
-                        transition: `opacity ${transitionDuration * 0.7}ms ease-in-out`,
-                        objectFit: objectFit,
-                        width: '100%',
-                        height: '100%'
-                    }}
+                    style={imageStyles}
                 />
                 <div
                     className="responsiveImage"
-                    style={{
-                        width: containerDimensions.width,
-                        height: containerDimensions.height,
-                        pointerEvents: 'none'
-                    }}
-                    id={ghostId}
+                    style={ghostStyles}
+                    id={ids.ghost}
                     aria-hidden="true"
                 >
                     {children}
@@ -219,4 +283,4 @@ const ImgRemote: React.FC<ImgRemoteProps> = ({
     );
 };
 
-export default ImgRemote;
+export default React.memo(ImgRemote);

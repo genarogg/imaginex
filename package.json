@@ -4,9 +4,10 @@
   "author": "Genaro Gonzalez",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "files": [
     "src/app/api",
+    "fn/postinstall.js",
     "dist"
   ],
   "scripts": {

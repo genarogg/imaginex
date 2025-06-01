@@ -1,3 +1,5 @@
+import React from 'react'
+
 //@ts-ignore
 import "../styles/globals.css";
 

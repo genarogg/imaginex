@@ -26,7 +26,16 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.combined.tsbuildinfo"
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.combined.tsbuildinfo",
+    "allowJs": true,
+    "incremental": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
     "src",
@@ -37,5 +46,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "tailwind.config.js"
+  ],
+  "exclude": [
+    "node_modules"
   ]
 }

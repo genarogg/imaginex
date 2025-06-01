@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import ImgProps from '../utils/ImgProps';
 import { handleImageLoad as handleImageLoadUtil } from '../utils/handleImageLoadUtil';
@@ -23,15 +23,89 @@ const ImgLocal: React.FC<ImgProps> = ({
     objectFit = 'cover',
     maintainAspectRatio = true 
 }) => {
-    const [isVisible, setIsVisible] = useState(visible || priority);
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [hasError, setHasError] = useState(false);
-    const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+    // Estado consolidado para reducir re-renders
+    const [imageState, setImageState] = useState({
+        isVisible: visible || priority,
+        isLoaded: false,
+        hasError: false,
+        imageDimensions: { width: 0, height: 0 }
+    });
     
     const imgRef = useRef<HTMLDivElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
 
-    // Cleanup function
+    // Memoizar blur URL
+    const blurDataURL = useMemo(() => src?.blurDataURL || '', [src?.blurDataURL]);
+
+    // Memoizar IDs únicos
+    const ids = useMemo(() => ({
+        container: id ? `${id}Container` : undefined,
+        img: id ? `${id}Img` : undefined,
+        ghost: id ? `${id}Ghost` : undefined
+    }), [id]);
+
+    // Memoizar dimensiones del contenedor
+    const containerDimensions = useMemo(() => 
+        imageState.isLoaded && maintainAspectRatio 
+            ? imageState.imageDimensions 
+            : { width, height },
+        [imageState.isLoaded, imageState.imageDimensions, maintainAspectRatio, width, height]
+    );
+
+    // Memoizar dimensiones de la imagen
+    const imageDimensions = useMemo(() => ({
+        width: maintainAspectRatio && imageState.isLoaded 
+            ? imageState.imageDimensions.width 
+            : width,
+        height: maintainAspectRatio && imageState.isLoaded 
+            ? imageState.imageDimensions.height 
+            : height
+    }), [maintainAspectRatio, imageState.isLoaded, imageState.imageDimensions, width, height]);
+
+    // Memoizar estilos del contenedor principal
+    const containerStyles = useMemo(() => ({
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+        ...style
+    }), [containerDimensions, style]);
+
+    // Memoizar estilos del background blur
+    const backgroundStyles = useMemo(() => ({
+        backgroundImage: blurDataURL ? `url(${blurDataURL})` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        width: containerDimensions.width,
+        height: containerDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+        transition: 'background-image 0.3s ease-out'
+    }), [blurDataURL, containerDimensions]);
+
+    // Memoizar estilos de la imagen
+    const imageStyles = useMemo(() => ({ 
+        position: 'absolute' as const,
+        opacity: imageState.isLoaded ? 1 : 0,
+        transition: 'opacity 0.3s ease-in-out',
+        objectFit: objectFit,
+        width: '100%',
+        height: '100%'
+    }), [imageState.isLoaded, objectFit]);
+
+    // Memoizar estilos del ghost div
+    const ghostStyles = useMemo(() => ({ 
+        width: containerDimensions.width, 
+        height: containerDimensions.height,
+        pointerEvents: 'none' as const
+    }), [containerDimensions]);
+
+    // Handler consolidado para actualizar estado
+    const updateImageState = useCallback((updates: Partial<typeof imageState>) => {
+        setImageState(prev => ({ ...prev, ...updates }));
+    }, []);
+
+    // Cleanup optimizado
     const cleanup = useCallback(() => {
         if (observerRef.current) {
             observerRef.current.disconnect();
@@ -39,26 +113,25 @@ const ImgLocal: React.FC<ImgProps> = ({
         }
     }, []);
 
-    // Initialize intersection observer
+    // Memoizar opciones del observer
+    const observerOptions = useMemo(() => ({
+        threshold: 0.1,
+        rootMargin: '50px'
+    }), []);
+
+    // Inicializar intersection observer
     useEffect(() => {
         if (priority || visible) return; 
         
-        const options = {
-            threshold: 0.1,
-            rootMargin: '50px'
+        const handleIntersection = (entries: IntersectionObserverEntry[]) => {
+            const entry = entries[0];
+            if (entry?.isIntersecting) {
+                updateImageState({ isVisible: true });
+                observerRef.current?.disconnect();
+            }
         };
 
-        observerRef.current = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        setIsVisible(true);
-                        observerRef.current?.disconnect();
-                    }
-                });
-            },
-            options
-        );
+        observerRef.current = new IntersectionObserver(handleIntersection, observerOptions);
 
         const currentRef = imgRef.current;
         if (currentRef && observerRef.current) {
@@ -66,9 +139,9 @@ const ImgLocal: React.FC<ImgProps> = ({
         }
 
         return cleanup;
-    }, [priority, visible, cleanup]);
+    }, [priority, visible, cleanup, observerOptions, updateImageState]);
 
-    // Handle image load using utility function
+    // Handle image load optimizado
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
         handleImageLoadUtil({
             event,
@@ -78,28 +151,24 @@ const ImgLocal: React.FC<ImgProps> = ({
             maintainAspectRatio,
             componentType: 'local',
             onDimensionsCalculated: (dimensions) => {
-                setImageDimensions(dimensions);
-                setIsLoaded(true);
-                setHasError(false);
+                updateImageState({
+                    imageDimensions: dimensions,
+                    isLoaded: true,
+                    hasError: false
+                });
             }
         });
-    }, [id, width, height, maintainAspectRatio]);
+    }, [id, width, height, maintainAspectRatio, updateImageState]);
 
     const handleImageError = useCallback(() => {
-        setHasError(true);
-        setIsLoaded(true);
-    }, []);
+        updateImageState({ 
+            hasError: true, 
+            isLoaded: true 
+        });
+    }, [updateImageState]);
 
-    // Generate unique IDs safely
-    const containerId = id ? `${id}Container` : undefined;
-    const imgId = id ? `${id}Img` : undefined;
-    const ghostId = id ? `${id}Ghost` : undefined;
-
-    // Get container dimensions
-    const containerDimensions = isLoaded && maintainAspectRatio ? imageDimensions : { width, height };
-
-    // Render error state using reusable component
-    if (hasError) {
+    // Early return para estado de error
+    if (imageState.hasError) {
         return (
             <ImageError
                 width={containerDimensions.width}
@@ -114,62 +183,36 @@ const ImgLocal: React.FC<ImgProps> = ({
     return (
         <div
             ref={imgRef}
-            style={{
-                width: containerDimensions.width,
-                height: containerDimensions.height,
-                position: 'relative',
-                overflow: 'hidden',
-                ...style
-            }}
+            style={containerStyles}
             className={`responsiveImage ${className}`}
         >
-            {isVisible && (
+            {imageState.isVisible && (
                 <div
-                    style={{
-                        backgroundImage: src?.blurDataURL ? `url(${src.blurDataURL})` : 'none',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        width: containerDimensions.width,
-                        height: containerDimensions.height,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        transition: 'background-image 0.3s ease-out'
-                    }}
+                    style={backgroundStyles}
                     className="responsiveImage"
-                    id={containerId}
+                    id={ids.container}
                 >
                     <Image
                         src={src}
                         alt={alt}
-                        id={imgId}
-                        className={`${className} responsiveImage ${isLoaded ? 'fadeIn' : ''}`}
+                        id={ids.img}
+                        className={`${className} responsiveImage ${imageState.isLoaded ? 'fadeIn' : ''}`}
                         placeholder={placeholder}
-                        blurDataURL={src?.blurDataURL}
-                        width={maintainAspectRatio && isLoaded ? imageDimensions.width : width}
-                        height={maintainAspectRatio && isLoaded ? imageDimensions.height : height}
+                        blurDataURL={blurDataURL}
+                        width={imageDimensions.width}
+                        height={imageDimensions.height}
                         loading={loading}
                         priority={priority}
                         quality={quality}
                         sizes={sizes}
                         onLoad={handleImageLoad}
                         onError={handleImageError}
-                        style={{ 
-                            position: 'absolute',
-                            opacity: isLoaded ? 1 : 0,
-                            transition: 'opacity 0.3s ease-in-out',
-                            objectFit: objectFit,
-                            width: '100%',
-                            height: '100%'
-                        }}
+                        style={imageStyles}
                     />
                     <div
                         className="responsiveImage"
-                        style={{ 
-                            width: containerDimensions.width, 
-                            height: containerDimensions.height,
-                            pointerEvents: 'none'
-                        }}
-                        id={ghostId}
+                        style={ghostStyles}
+                        id={ids.ghost}
                         aria-hidden="true"
                     />
                 </div>
@@ -178,4 +221,4 @@ const ImgLocal: React.FC<ImgProps> = ({
     );
 };
 
-export default ImgLocal
+export default React.memo(ImgLocal);

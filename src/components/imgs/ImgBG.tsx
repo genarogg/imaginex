@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { ImgBGProps } from '../utils/ImgProps';
 import { handleBackgroundImageLoad } from '../utils/handleImageLoadUtil';
@@ -27,17 +27,32 @@ const ImgBG: React.FC<ImgBGProps> = ({
     backgroundPosition = 'center',
     maintainAspectRatio = true
 }) => {
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [hasError, setHasError] = useState(false);
-    const [finalImageSrc, setFinalImageSrc] = useState<string>('');
-    const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-    const [containerDimensions, setContainerDimensions] = useState({ width, height });
-    const [calculatedBackgroundSize, setCalculatedBackgroundSize] = useState(backgroundSize);
+    // Estados consolidados en un solo objeto para reducir renders
+    const [imageState, setImageState] = useState({
+        isLoaded: false,
+        hasError: false,
+        finalImageSrc: '',
+        imageDimensions: { width: 0, height: 0 },
+        containerDimensions: { width, height },
+        calculatedBackgroundSize: backgroundSize
+    });
 
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
 
-    // Cleanup function
+    // Memoizar blur URL para evitar recálculos
+    const blurUrl = useMemo(() => 
+        typeof src === 'object' && src.blurDataURL ? src.blurDataURL : '',
+        [src]
+    );
+
+    // Memoizar IDs seguros
+    const ids = useMemo(() => ({
+        container: id ? `${id}Container` : undefined,
+        image: id ? `${id}Img` : undefined
+    }), [id]);
+
+    // Cleanup optimizado
     const cleanup = useCallback(() => {
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -45,11 +60,14 @@ const ImgBG: React.FC<ImgBGProps> = ({
         }
     }, []);
 
-    useEffect(() => {
-        return cleanup;
-    }, [cleanup]);
+    useEffect(() => cleanup, [cleanup]);
 
-    // Handle image load using utility function
+    // Handler consolidado para actualizar estado
+    const updateImageState = useCallback((updates: Partial<typeof imageState>) => {
+        setImageState(prev => ({ ...prev, ...updates }));
+    }, []);
+
+    // Handle image load optimizado
     const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
         handleBackgroundImageLoad({
             event,
@@ -58,64 +76,103 @@ const ImgBG: React.FC<ImgBGProps> = ({
             maintainAspectRatio,
             backgroundSize,
             onImageLoaded: (imageSrc, imageDimensions, containerDimensions, calculatedBackgroundSize) => {
-                setImageDimensions(imageDimensions);
-                setContainerDimensions(containerDimensions);
-                setCalculatedBackgroundSize(calculatedBackgroundSize);
-                setFinalImageSrc(imageSrc);
-                setIsLoaded(true);
-                setHasError(false);
+                updateImageState({
+                    imageDimensions,
+                    containerDimensions,
+                    calculatedBackgroundSize,
+                    finalImageSrc: imageSrc,
+                    isLoaded: true,
+                    hasError: false
+                });
 
-                // Delay removal of the hidden Image element
+                // Delay removal optimizado
                 timeoutRef.current = setTimeout(() => {
-                    if (imgRef.current && imgRef.current.parentNode) {
-                        imgRef.current.remove();
-                        imgRef.current = null;
-                    }
+                    imgRef.current?.remove();
+                    imgRef.current = null;
                 }, removeDelay);
             }
         });
-    }, [removeDelay, width, height, maintainAspectRatio, backgroundSize]);
+    }, [removeDelay, width, height, maintainAspectRatio, backgroundSize, updateImageState]);
 
     const handleImageError = useCallback(() => {
-        setHasError(true);
+        updateImageState({ hasError: true });
         console.error(`Failed to load background image: ${src}`);
-    }, [src]);
+    }, [src, updateImageState]);
 
-    // Generate safe IDs
-    const containerId = id ? `${id}Container` : undefined;
-    const imageId = id ? `${id}Img` : undefined;
+    // Memoizar dimensiones finales
+    const finalDimensions = useMemo(() => 
+        maintainAspectRatio && imageState.isLoaded
+            ? imageState.containerDimensions
+            : { width, height },
+        [maintainAspectRatio, imageState.isLoaded, imageState.containerDimensions, width, height]
+    );
 
-    // Get blur data URL
-    const blurUrl = typeof src === 'object' && src.blurDataURL ? src.blurDataURL : '';
+    // Memoizar background size final
+    const finalBackgroundSize = useMemo(() =>
+        maintainAspectRatio && imageState.isLoaded
+            ? imageState.calculatedBackgroundSize
+            : backgroundSize,
+        [maintainAspectRatio, imageState.isLoaded, imageState.calculatedBackgroundSize, backgroundSize]
+    );
 
-    // Use calculated dimensions if maintaining aspect ratio and loaded
-    const finalContainerDimensions = maintainAspectRatio && isLoaded
-        ? containerDimensions
-        : { width, height };
-
-    // Use calculated background size
-    const finalBackgroundSize = maintainAspectRatio && isLoaded
-        ? calculatedBackgroundSize
-        : backgroundSize;
-
-    // Common background styles
-    const backgroundStyles = {
+    // Memoizar estilos base de background
+    const baseBackgroundStyles = useMemo(() => ({
         backgroundSize: finalBackgroundSize,
         backgroundPosition,
         backgroundRepeat: 'no-repeat' as const,
         backgroundAttachment,
-    };
+    }), [finalBackgroundSize, backgroundPosition, backgroundAttachment]);
 
-    // Error state using reusable component
-    if (hasError) {
+    // Memoizar estilos del contenedor principal
+    const containerStyles = useMemo(() => ({
+        ...baseBackgroundStyles,
+        backgroundImage: blurUrl ? `url(${blurUrl})` : 'none',
+        width: finalDimensions.width,
+        height: finalDimensions.height,
+        position: 'relative' as const,
+        overflow: 'hidden',
+    }), [baseBackgroundStyles, blurUrl, finalDimensions]);
+
+    // Memoizar estilos del contenido principal
+    const contentStyles = useMemo(() => ({
+        ...baseBackgroundStyles,
+        backgroundImage: imageState.isLoaded && imageState.finalImageSrc
+            ? `url(${imageState.finalImageSrc})`
+            : blurUrl ? `url(${blurUrl})` : 'none',
+        width: finalDimensions.width,
+        height: finalDimensions.height,
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        opacity: imageState.isLoaded ? 1 : 0.8,
+        transition: `all ${transitionDuration}ms ease-in-out`,
+        ...style
+    }), [
+        baseBackgroundStyles, 
+        imageState.isLoaded, 
+        imageState.finalImageSrc, 
+        blurUrl, 
+        finalDimensions, 
+        transitionDuration, 
+        style
+    ]);
+
+    // Memoizar dimensiones de la imagen oculta
+    const hiddenImageDimensions = useMemo(() => ({
+        width: maintainAspectRatio ? (imageState.imageDimensions.width || width) : width,
+        height: maintainAspectRatio ? (imageState.imageDimensions.height || height) : height
+    }), [maintainAspectRatio, imageState.imageDimensions, width, height]);
+
+    // Early return para estado de error
+    if (imageState.hasError) {
         return (
             <ImageError
-                width={finalContainerDimensions.width}
-                height={finalContainerDimensions.height}
+                width={finalDimensions.width}
+                height={finalDimensions.height}
                 alt={alt}
                 className={className}
                 style={{
-                    ...backgroundStyles,
+                    ...baseBackgroundStyles,
                     ...style
                 }}
                 errorMessage="Background image failed to load"
@@ -128,65 +185,47 @@ const ImgBG: React.FC<ImgBGProps> = ({
 
     return (
         <>
-            {/* Hidden Image for loading */}
-            <Image
-                ref={imgRef}
-                src={src}
-                alt={alt}
-                id={imageId}
-                placeholder={placeholder}
-                blurDataURL={blurUrl}
-                width={maintainAspectRatio ? imageDimensions.width || width : width}
-                height={maintainAspectRatio ? imageDimensions.height || height : height}
-                loading={loading}
-                priority={priority}
-                quality={quality}
-                sizes={sizes}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-                style={{
-                    position: 'absolute',
-                    top: '-9999px',
-                    left: '-9999px',
-                    opacity: 0,
-                    pointerEvents: 'none',
-                    zIndex: -1
-                }}
-                aria-hidden="true"
-            />
+            {/* Hidden Image for loading - Solo renderizar si no está cargado */}
+            {!imageState.isLoaded && (
+                <Image
+                    ref={imgRef}
+                    src={src}
+                    alt={alt}
+                    id={ids.image}
+                    placeholder={placeholder}
+                    blurDataURL={blurUrl}
+                    width={hiddenImageDimensions.width}
+                    height={hiddenImageDimensions.height}
+                    loading={loading}
+                    priority={priority}
+                    quality={quality}
+                    sizes={sizes}
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                    style={{
+                        position: 'absolute',
+                        top: '-9999px',
+                        left: '-9999px',
+                        opacity: 0,
+                        pointerEvents: 'none',
+                        zIndex: -1
+                    }}
+                    aria-hidden="true"
+                />
+            )}
 
             {/* Background Container */}
             <div
                 className="responsiveImage"
-                style={{
-                    ...backgroundStyles,
-                    backgroundImage: blurUrl ? `url(${blurUrl})` : 'none',
-                    width: finalContainerDimensions.width,
-                    height: finalContainerDimensions.height,
-                    position: 'relative' as const,
-                    overflow: 'hidden',
-                }}
+                style={containerStyles}
                 role="img"
                 aria-label={alt}
             >
                 {/* Main Content Container */}
                 <div
-                    id={containerId}
-                    className={`${className} responsiveImage ${isLoaded ? 'fadeIn' : ''}`}
-                    style={{
-                        ...backgroundStyles,
-                        backgroundImage: isLoaded && finalImageSrc
-                            ? `url(${finalImageSrc})`
-                            : blurUrl ? `url(${blurUrl})` : 'none',
-                        width: finalContainerDimensions.width,
-                        height: finalContainerDimensions.height,
-                        position: 'absolute' as const,
-                        top: 0,
-                        left: 0,
-                        opacity: isLoaded ? 1 : 0.8,
-                        transition: `all ${transitionDuration}ms ease-in-out`,
-                        ...style
-                    }}
+                    id={ids.container}
+                    className={`${className} responsiveImage ${imageState.isLoaded ? 'fadeIn' : ''}`}
+                    style={contentStyles}
                 >
                     {children}
                 </div>
@@ -195,4 +234,4 @@ const ImgBG: React.FC<ImgBGProps> = ({
     );
 };
 
-export default ImgBG;
+export default React.memo(ImgBG);

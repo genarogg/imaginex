@@ -1,5 +1,5 @@
 "use client"
-import type React from "react"
+import React from "react"
 import Img from "@/components"
 import imgLocal from "../../public/nanify.webp"
 
