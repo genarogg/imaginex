@@ -12,9 +12,14 @@
     "@plaiceholder/next": "^3.0.0",
     "next": "15.3.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7",
+    "autoprefixer": "^10.4.20"
   },
   "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8",
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
     "@types/react": "^19",
